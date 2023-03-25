@@ -1,0 +1,70 @@
+version: '3.9'
+
+volumes:
+  redis_volume:
+  celery_volume:
+  mysql_volume:
+
+services:
+  redis_db:
+    image: 'redis:6.2.6'
+    volumes:
+      - redis_volume:/usr/local/etc/redis/redis.conf
+    env_file:
+      - .env
+    expose:
+      - ${REDIS_PORT}
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    network_mode: "host"
+
+  mysql_db:
+    image: mysql:8.0.32
+    restart: always
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    env_file:
+      - .env
+    expose:
+      - 3306
+#    ports:
+#      - '3306:3306'
+    volumes:
+      - mysql_volume:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    network_mode: "host"
+
+  api:
+    build:
+      context: .
+    env_file:
+      - .env
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+      redis_db:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+    network_mode: "host"
